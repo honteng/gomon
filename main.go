@@ -85,8 +85,9 @@ func (r *FileBasedTaskRunner) loop() {
 					runner.Start(r.cmd, args, chdir)
 					ch <- struct{}{}
 					err := runner.Wait(r.cmd, args, chdir)
-					if err != nil && strings.HasPrefix(err.Error(), "exit status ") {
-						logger.Error("exit")
+					if err == nil {
+						notifyError(time.Since(t), err)
+					} else if strings.HasPrefix(err.Error(), "exit status ") {
 						notifyError(time.Since(t), err)
 					}
 					return err
@@ -100,9 +101,8 @@ func (r *FileBasedTaskRunner) loop() {
 	}
 }
 
-func (r *FileBasedTaskRunner) Run(filename string) (duration time.Duration, err error) {
+func (r *FileBasedTaskRunner) Run(filename string) {
 	r.filenameCh <- filename
-	return 0, nil
 }
 
 func main() {
@@ -189,7 +189,7 @@ func main() {
 		}
 	}
 
-	var taskRunner = &FileBasedTaskRunner{
+	taskRunner := &FileBasedTaskRunner{
 		cmd:            cmd,
 		AppendFilename: options.Bool("F"),
 		Chdir:          options.Bool("chdir"),
@@ -198,18 +198,18 @@ func main() {
 
 	go taskRunner.loop()
 
-	var patternStr string = options.String("m")
+	patternStr := options.String("m")
 	if len(patternStr) == 0 {
 		// the empty regexp matches everything anyway
 		matchAll = true
 	}
 
-	var pattern = regexp.MustCompile(patternStr)
+	pattern := regexp.MustCompile(patternStr)
 
 	for {
 		select {
 		case e := <-watcher.Event:
-			var matched = matchAll
+			matched := matchAll
 			if !matched {
 				matched = pattern.MatchString(e.Name)
 			}
