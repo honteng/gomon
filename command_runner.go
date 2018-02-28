@@ -3,6 +3,8 @@ package main
 import (
 	"os"
 	"os/exec"
+
+	"github.com/c9s/gomon/logger"
 )
 
 type CommandRunner struct {
@@ -24,6 +26,15 @@ func (r *CommandRunner) buildTask(cmd Command, dir string) *exec.Cmd {
 	return p
 }
 
+func (r *CommandRunner) Start(cmd Command, args []string, dir string) error {
+	r.task = r.buildTask(cmd, dir)
+	return r.task.Start()
+}
+
+func (r *CommandRunner) Wait(cmd Command, args []string, dir string) error {
+	return r.task.Wait()
+}
+
 func (r *CommandRunner) Run(commands []Command, args []string, dir string) error {
 	for _, cmd := range commands {
 		r.task = r.buildTask(cmd, dir)
@@ -43,8 +54,14 @@ func (r *CommandRunner) Run(commands []Command, args []string, dir string) error
 }
 
 func (r *CommandRunner) Stop() error {
-	if r.task != nil {
-		return r.task.Process.Kill()
+	if r.task != nil && r.task.Process != nil {
+		logger.Debug("start kill")
+		if err := r.task.Process.Kill(); err != nil {
+			return err
+		}
+		_, err := r.task.Process.Wait()
+		logger.Debug("end kill")
+		return err
 	}
 	return nil
 }
