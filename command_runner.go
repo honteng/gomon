@@ -3,8 +3,6 @@ package main
 import (
 	"os"
 	"os/exec"
-
-	"github.com/c9s/gomon/logger"
 )
 
 type CommandRunner struct {
@@ -37,12 +35,10 @@ func (r *CommandRunner) Wait(cmd Command, args []string, dir string) error {
 
 func (r *CommandRunner) Stop() error {
 	if r.task != nil && r.task.Process != nil {
-		logger.Debug("start kill")
 		if err := r.task.Process.Kill(); err != nil {
 			return err
 		}
 		_, err := r.task.Process.Wait()
-		logger.Debug("end kill")
 		return err
 	}
 	return nil

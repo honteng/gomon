@@ -72,7 +72,6 @@ func (r *FileBasedTaskRunner) loop() {
 				runner.Stop()
 				g.Wait()
 			}
-			logger.Debug("wait done")
 
 			runner = &CommandRunner{}
 			ch := make(chan struct{})
@@ -80,8 +79,6 @@ func (r *FileBasedTaskRunner) loop() {
 			f := func(args []string, chdir string) func() error {
 				return func() error {
 					t := time.Now()
-					logger.Debug("runner starts")
-					defer logger.Debug("runner ends")
 					runner.Start(r.cmd, args, chdir)
 					ch <- struct{}{}
 					err := runner.Wait(r.cmd, args, chdir)
