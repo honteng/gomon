@@ -221,19 +221,7 @@ func main() {
 				continue
 			}
 
-			if options.Bool("d") {
-				logger.Debugf("Event=%+v", e)
-			} else {
-				if e.IsCreate() {
-					logger.Infoln("Created", e.Name)
-				} else if e.IsModify() {
-					logger.Infoln("Modified", e.Name)
-				} else if e.IsDelete() {
-					logger.Infoln("Deleted", e.Name)
-				} else if e.IsRename() {
-					logger.Infoln("Renamed", e.Name)
-				}
-			}
+			logger.Debugf("Event=%+v", e)
 
 			filename := e.Name
 			taskRunner.Run(filename)
