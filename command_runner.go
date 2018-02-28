@@ -24,27 +24,22 @@ func (r *CommandRunner) buildTask(cmd Command, dir string) *exec.Cmd {
 	return p
 }
 
-func (r *CommandRunner) Run(commands []Command, args []string, dir string) error {
-	for _, cmd := range commands {
-		r.task = r.buildTask(cmd, dir)
+func (r *CommandRunner) Start(cmd Command, args []string, dir string) error {
+	r.task = r.buildTask(cmd, dir)
+	return r.task.Start()
+}
 
-		// Append the arguments to the task arguments
-		r.task.Args = append(r.task.Args, args...)
-
-		if err := r.task.Start(); err != nil {
-			return err
-		}
-
-		if err := r.task.Wait(); err != nil {
-			return err
-		}
-	}
-	return nil
+func (r *CommandRunner) Wait(cmd Command, args []string, dir string) error {
+	return r.task.Wait()
 }
 
 func (r *CommandRunner) Stop() error {
-	if r.task != nil {
-		return r.task.Process.Kill()
+	if r.task != nil && r.task.Process != nil {
+		if err := r.task.Process.Kill(); err != nil {
+			return err
+		}
+		_, err := r.task.Process.Wait()
+		return err
 	}
 	return nil
 }

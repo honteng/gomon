@@ -1,57 +1,39 @@
 gomon
 =====
 
-[![Build Status](https://travis-ci.org/c9s/gomon.png)](https://travis-ci.org/c9s/gomon)
-
 go source file monitor, which restarts/rebuilds your go package automatically
 while you are changing it.
+
+What's the difference?
+=====
+
+The original version didn't kill the child process correctly and it stops when the child process is in infinite loop. This version can kill the child process correctly even in infinite loop.
+
+Also I removed the most of the options because I don't use them and only specify custom command.
 
 Install
 -------
 
-    go get -u github.com/c9s/gomon
+    go get -u github.com/honteng/gomon
 
 Usage
 -----
 
     gomon [dir] -- [cmd]
 
-    gomon     # watch current directory and build the package (the default behavior)
-
-Monitoring Current Directory And Format Automatically:
-
-    gomon -f
-
-Monitoring Current Directory And Build Automatically:
-
-    gomon -b
-
-Monitoring Current Directory And Test Automatically:
-
-    gomon -t
-
-Monitoring Current Directory And Install Automatically:
-
-    gomon -i
-
-You can run commands sequentialy by specifying multiple options above.
-Monitoring Current Directory And Format, Build, Test and Install Automatically:
-
-    gomon -f -b -t -i
-
-Monitoring Directory And Build Automatically:
-
-    gomon -b path/to/package
-
-Monitoring Directory And Build Automatically With Verbose Messages:
-
-    gomon -b -x path/to/package
-
 Monitoring With Custom Command:
 
     gomon src -- go run -x server.go # execute go run -x server.go
     gomon src -- go build -x package # execute go build -x package
 
+Recursively check the subfolders
+    gomon src -R -- go run -x server.go
+
+Only watch the mached files with regex
+    gomon src -m '.*go' -- cmd 
+
+Ignore the specific file gomon src -d 'ignore.go' -- cmd 
+    gomon src -d 'ignore.go' -- cmd 
 
 Screenshot
 ----------
