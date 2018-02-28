@@ -1,15 +1,15 @@
 gomon
 =====
 
-[![Build Status](https://travis-ci.org/c9s/gomon.png)](https://travis-ci.org/c9s/gomon)
-
 go source file monitor, which restarts/rebuilds your go package automatically
 while you are changing it.
+
+Changed to fi
 
 Install
 -------
 
-    go get -u github.com/c9s/gomon
+    go get -u github.com/honteng/gomon
 
 Usage
 -----

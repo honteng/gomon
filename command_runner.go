@@ -35,24 +35,6 @@ func (r *CommandRunner) Wait(cmd Command, args []string, dir string) error {
 	return r.task.Wait()
 }
 
-func (r *CommandRunner) Run(commands []Command, args []string, dir string) error {
-	for _, cmd := range commands {
-		r.task = r.buildTask(cmd, dir)
-
-		// Append the arguments to the task arguments
-		r.task.Args = append(r.task.Args, args...)
-
-		if err := r.task.Start(); err != nil {
-			return err
-		}
-
-		if err := r.task.Wait(); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func (r *CommandRunner) Stop() error {
 	if r.task != nil && r.task.Process != nil {
 		logger.Debug("start kill")

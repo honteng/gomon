@@ -1,36 +1,59 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
 	"path/filepath"
 	"regexp"
 	"runtime"
-	"sync"
+	"strings"
 	"time"
 
+	"github.com/honteng/gomon/notify"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/c9s/gomon/logger"
-	"github.com/c9s/gomon/notify"
 	"github.com/howeyc/fsnotify"
 )
 
-var versionStr = "0.1.0"
+var (
+	versionStr = "1.0.0"
 
-var notifier notify.Notifier = nil
+	wasFailed                    = true
+	notifier     notify.Notifier = nil
+	alwaysNotify                 = false
+)
 
 type FileBasedTaskRunner struct {
-	Commands       []Command
+	cmd            Command
 	AppendFilename bool
 	Chdir          bool
 	filenameCh     chan string
 }
 
+func notifyError(d time.Duration, err error) {
+	if err != nil {
+		logger.Errorln("Task Failed:", err.Error())
+
+		notifier.NotifyFailed("Build Failed", err.Error())
+	} else {
+		logger.Infoln("Task Completed:", d)
+
+		if wasFailed {
+			wasFailed = false
+			notifier.NotifyFixed("Build Fixed", fmt.Sprintf("Spent: %s", d))
+		} else if alwaysNotify {
+			notifier.NotifySucceeded("Build Succeeded", fmt.Sprintf("Spent: %s", d))
+		}
+	}
+}
+
 func (r *FileBasedTaskRunner) loop() {
 	var runner *CommandRunner
-	var wg sync.WaitGroup
+	var g *errgroup.Group
 	for {
 		select {
 		case filename := <-r.filenameCh:
@@ -44,23 +67,33 @@ func (r *FileBasedTaskRunner) loop() {
 				args = append(args, filename)
 			}
 
-			logger.Infof("Starting: chdir=%s commands=%v args=%v", chdir, r.Commands, args)
+			logger.Infof("Starting: chdir=%s commands=%v args=%v", chdir, r.cmd, args)
 			if runner != nil {
 				runner.Stop()
-				wg.Wait()
+				g.Wait()
 			}
 			logger.Debug("wait done")
 
 			runner = &CommandRunner{}
 			ch := make(chan struct{})
-			wg.Add(1)
-			go func(args []string, chdir string) {
-				logger.Debug("runner start")
-				defer wg.Done()
-				runner.Start(r.Commands[0], args, chdir)
-				ch <- struct{}{}
-				runner.Wait(r.Commands[0], args, chdir)
+			g, _ = errgroup.WithContext(context.Background())
+			f := func(args []string, chdir string) func() error {
+				return func() error {
+					t := time.Now()
+					logger.Debug("runner starts")
+					defer logger.Debug("runner ends")
+					runner.Start(r.cmd, args, chdir)
+					ch <- struct{}{}
+					err := runner.Wait(r.cmd, args, chdir)
+					if err != nil && strings.HasPrefix(err.Error(), "exit status ") {
+						logger.Error("exit")
+						notifyError(time.Since(t), err)
+					}
+					return err
+				}
 			}(args, chdir)
+
+			g.Go(f)
 
 			<-ch
 		}
@@ -77,7 +110,6 @@ func main() {
 	dirArgs = FilterExistPaths(dirArgs)
 
 	var matchAll = false
-	var alwaysNotify = false
 
 	if options.Bool("h") {
 		fmt.Println("Usage: gomon [options] [dir] [-- command]")
@@ -104,37 +136,11 @@ func main() {
 	matchAll = options.Bool("matchall")
 	alwaysNotify = options.Bool("alwaysnotify")
 
-	// dynamically build the command list
-	var cmds = CommandList{}
-	if options.Bool("f") {
-		cmds.Add(goCommands["fmt"])
-	}
-	if options.Bool("t") {
-		cmds.Add(goCommands["test"])
-	}
-	if options.Bool("b") {
-		cmds.Add(goCommands["build"])
-	}
-	if options.Bool("r") {
-		cmds.Add(goCommands["run"])
-	}
-	if options.Bool("i") {
-		cmds.Add(goCommands["install"])
-	}
-	if options.Bool("x") {
-		cmds.AppendOption("-x")
-	}
-
 	if options.Bool("d") {
 		logger.Instance().SetLevel(logrus.DebugLevel)
 	}
 
-	if len(cmdArgs) > 0 {
-		cmds.Add(Command(cmdArgs))
-	} else if cmds.Len() == 0 {
-		// default to go build
-		cmds.Add(goCommands["build"])
-	}
+	cmd := Command(cmdArgs)
 
 	if len(dirArgs) == 0 {
 		var cwd, err = os.Getwd()
@@ -158,7 +164,7 @@ func main() {
 		notifier = notify.NewTextNotifier()
 	}
 
-	logger.Infoln("Watching", dirArgs, "for", cmds)
+	logger.Infoln("Watching", dirArgs, "for", cmd)
 
 	watcher, err := fsnotify.NewWatcher()
 
@@ -183,9 +189,8 @@ func main() {
 		}
 	}
 
-	var wasFailed bool = false
 	var taskRunner = &FileBasedTaskRunner{
-		Commands:       cmds.commands,
+		cmd:            cmd,
 		AppendFilename: options.Bool("F"),
 		Chdir:          options.Bool("chdir"),
 		filenameCh:     make(chan string),
@@ -230,33 +235,9 @@ func main() {
 				}
 			}
 
-			// TODO: time.ParseDuration
-			// go fmt vim plugin will rename the file and then create a new file
-			// In order to handle the batch operation, a delay is needed.
-			//go func(filename string) {
 			filename := e.Name
-			logger.Info("=======1")
-			var err error
-			var duration time.Duration
+			taskRunner.Run(filename)
 
-			duration, err = taskRunner.Run(filename)
-			if err != nil {
-				wasFailed = true
-				logger.Errorln("Task Failed:", err.Error())
-
-				notifier.NotifyFailed("Build Failed", err.Error())
-			} else {
-				logger.Infoln("Task Completed:", duration)
-
-				if wasFailed {
-					wasFailed = false
-					notifier.NotifyFixed("Build Fixed", fmt.Sprintf("Spent: %s", duration))
-				} else if alwaysNotify {
-					notifier.NotifySucceeded("Build Succeeded", fmt.Sprintf("Spent: %s", duration))
-				}
-			}
-
-			logger.Info("=======3")
 		case err := <-watcher.Error:
 			log.Println("Error:", err)
 		}
