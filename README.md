@@ -27,12 +27,15 @@ Monitoring With Custom Command:
     gomon src -- go build -x package # execute go build -x package
 
 Recursively check the subfolders
+
     gomon src -R -- go run -x server.go
 
 Only watch the mached files with regex
+
     gomon src -m '.*go' -- cmd 
 
 Ignore the specific file gomon src -d 'ignore.go' -- cmd 
+
     gomon src -d 'ignore.go' -- cmd 
 
 Screenshot
